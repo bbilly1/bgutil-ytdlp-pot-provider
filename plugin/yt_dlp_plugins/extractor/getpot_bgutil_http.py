@@ -49,7 +49,14 @@ class BgUtilHTTPPTP(BgUtilPTPBase):
             f'No base_url provided, defaulting to {self.DEFAULT_BASE_URL}')
         return self.DEFAULT_BASE_URL
 
+    @functools.cached_property
+    def _disabled(self):
+        return bool(self._configuration_arg('disable', default=[None])[0])
+
     def _check_server_availability(self, ctx: PoTokenRequest):
+        if self._disabled:
+            return False
+
         if self._last_server_check + 60 > time.time():
             return self._server_available
 
@@ -96,12 +103,19 @@ class BgUtilHTTPPTP(BgUtilPTPBase):
             self._last_server_check = time.time()
 
     def is_available(self):
+        if self._disabled:
+            return False
+
         return self._server_available or self._last_server_check + 60 < int(time.time())
 
     def _real_request_pot(
         self,
         request: PoTokenRequest,
     ) -> PoTokenResponse:
+        if self._disabled:
+            raise PoTokenProviderRejectedRequest(
+                f'{self.PROVIDER_NAME} provider is disabled via extractor args')
+
         if not self._check_server_availability(request):
             raise PoTokenProviderRejectedRequest(
                 f'{self.PROVIDER_NAME} server is not available')

@@ -190,7 +190,14 @@ class BgUtilScriptPTPBase(BgUtilPTPBase, abc.ABC):
             return self._server_home
 
     def is_available(self) -> bool:
+        if self._disabled:
+            return False
+
         return self._check_script(self._script_path)
+
+    @functools.cached_property
+    def _disabled(self):
+        return bool(self._configuration_arg('disable', default=[None])[0])
 
     def _check_script_impl(self, script_path) -> bool:
         if not os.path.isfile(script_path):
@@ -224,6 +231,10 @@ class BgUtilScriptPTPBase(BgUtilPTPBase, abc.ABC):
         request: PoTokenRequest,
     ) -> PoTokenResponse:
         # used for CI check
+        if self._disabled:
+            raise PoTokenProviderError(
+                f'{self.PROVIDER_NAME} provider is disabled via extractor args')
+
         self.logger.trace(
             f'Generating POT via script: {self._script_path}')
 
