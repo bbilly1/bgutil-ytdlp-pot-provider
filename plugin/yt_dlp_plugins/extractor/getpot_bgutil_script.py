@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 import sysconfig
-from typing import Iterable, TypeVar
+from typing import Iterable
 
 from yt_dlp.extractor.youtube.pot.provider import (
     PoTokenProviderError,
@@ -18,12 +18,11 @@ from yt_dlp.extractor.youtube.pot.provider import (
     register_provider,
 )
 from yt_dlp.extractor.youtube.pot.utils import get_webpo_content_binding
-from yt_dlp.utils import Popen, int_or_none
+from yt_dlp.utils import Popen, int_or_none, shell_quote
 from yt_dlp.utils.traversal import traverse_obj
 
 from yt_dlp_plugins.extractor.getpot_bgutil import BgUtilPTPBase
 
-T = TypeVar('T')
 _FALLBACK_PATHEXT = ('.COM', '.EXE', '.BAT', '.CMD')
 
 
@@ -158,22 +157,13 @@ class BgUtilScriptPTPBase(BgUtilPTPBase, abc.ABC):
         super().__init__(*args, **kwargs)
         self._check_script = functools.cache(self._check_script_impl)
 
-    def _base_config_arg(self, key: str, default: T = None) -> str | T:
-        return self.ie._configuration_arg(
-            ie_key='youtubepot-bgutilscript', key=key, default=[default])[0]
-
     @functools.cached_property
     def _server_home(self) -> str:
-        resolve_path = lambda *ps: os.path.abspath(
-            os.path.expanduser(os.path.expandvars(os.path.join(*ps))))
-        if server_home := self._base_config_arg('server_home'):
-            return resolve_path(server_home)
-
-        if script_path := self._base_config_arg('script_path'):
-            return resolve_path(script_path, os.pardir, os.pardir)
+        if path := self._script_path_provided():
+            return path
 
         # default if no arg was passed
-        default_home = resolve_path('~', 'bgutil-ytdlp-pot-provider', 'server')
+        default_home = self._resolve_script_path('~', 'bgutil-ytdlp-pot-provider', 'server')
         self.logger.debug(
             f'No server_home or script_path passed, defaulting to {default_home}', once=True)
         return default_home
@@ -242,6 +232,7 @@ class BgUtilScriptPTPBase(BgUtilPTPBase, abc.ABC):
         if proxy := request.request_proxy:
             command_args.extend(['-p', proxy])
         command_args.extend(['-c', get_webpo_content_binding(request)[0]])
+        command_args.extend(['--innertube-context', json.dumps(request.innertube_context)])
         if request.bypass_cache:
             command_args.append('--bypass-cache')
         if request.request_source_address:
@@ -255,7 +246,7 @@ class BgUtilScriptPTPBase(BgUtilPTPBase, abc.ABC):
             f'{request.internal_client_name} client via bgutil script',
         )
         self.logger.debug(
-            f'Executing command to get POT via script: {" ".join(command_args)}')
+            f'Executing command to get POT via script: {" ".join(map(shell_quote, command_args))}')
 
         try:
             stdout, _, returncode = Popen.run(
@@ -270,8 +261,8 @@ class BgUtilScriptPTPBase(BgUtilPTPBase, abc.ABC):
             raise PoTokenProviderError(
                 f'_get_pot_via_script failed: Unable to run script (caused by {e!r})') from e
 
-        if stdout_extra := stdout_lines:
-            self.logger.trace(f'script stdout:\n{stdout_extra}')
+        if stdout_extra := '\n'.join(stdout_lines):
+            self.logger.debug(f'script stdout:\n{stdout_extra}')
         if returncode:
             raise PoTokenProviderError(
                 f'_get_pot_via_script failed with returncode {returncode}')
