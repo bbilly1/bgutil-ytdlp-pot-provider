@@ -1,5 +1,11 @@
 # BgUtils POT Provider
 
+> [!NOTE]
+> This is a fork implementing a disable flag for better application embedding
+> to programmatically enable / disable the plugin.
+>
+> This is not meant for general use, only for [github.com/tubearchivist/tubearchivist](https://github.com/tubearchivist/tubearchivist)
+
 > [!CAUTION]
 > Providing a PO token does not guarantee bypassing 403 errors or bot checks, but it _may_ help your traffic seem more legitimate.
 
